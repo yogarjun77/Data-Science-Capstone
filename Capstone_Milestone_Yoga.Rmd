@@ -1,0 +1,241 @@
+---
+title: 'Capstone Milestone Report: Exploratory Analysis'
+author: "yogarjun77"
+date: "June 13, 2016"
+output: html_document
+---
+
+##**1) Introduction**##
+
+This analysis only utilizes the US English dataset to demonstrate the capability to build a predictive text model.
+
+The files were downloaded from data source  https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-
+SwiftKey.zip and unzipped into a selected folder. 
+
+This document only highlights the key points. The full script can be seen at https://github.com/yogarjun77/Data-Science-Capstone  
+
+3 huge sources of data are further analyzed in the next steps. They represent 3 writing styles   
++ blogs: informal, casual styles  
++ news: formal, informative  
++ twitter: brief, abbreviated, emojis  
+
+First, the necessary libraries are loaded.
+
+```{r libraries, echo = TRUE, message=FALSE}
+library(tm)
+library(ggplot2)
+library(stringi)
+setwd("~/R/final/en_US")
+set.seed(521)
+```
+
+Next the files are read using the tm package. 
+```{r loading, echo = TRUE, message=FALSE}
+#load files
+
+con <- file("en_US.blogs.txt", "r", blocking = FALSE)
+blogs <- readLines(con)
+close(con)
+ 
+con <- file("en_US.news.txt", "r", blocking = FALSE)
+news <- readLines(con)
+cat(" def\n", file = "en_US.news.txt", append = TRUE)
+news <- readLines(con) # gets both
+close(con)
+ 
+con <- file("en_US.twitter.txt", "r", blocking = FALSE)
+twitter <- readLines(con)
+close(con)
+```
+Summary of the extracted files:
+```{r summary, echo = FALSE}
+#Summarize file details
+
+n1<- format(object.size(blogs), units = "Mb")
+n2 <- as.data.frame(stri_stats_latex(news)[4])[1,]
+n3 <- length(news)
+b1 <- format(object.size(blogs), units = "Mb") 
+b2 <- as.data.frame(stri_stats_latex(blogs)[4])[1,]
+b3 <- length(blogs)
+t1 <- format(object.size(blogs), units = "Mb")
+t2 <- as.data.frame(stri_stats_latex(twitter)[4])[1,]
+t3 <- length(twitter)
+filesummary <- matrix(c(b1, n1, t1, b2, n2, t2, b3, n3, t3), nrow = 3, ncol = 3, byrow = TRUE, dimnames = list(c("File Size", "Words Count", "Rows Count"),c("Blogs", "News", "Twitter")))
+```
+
+```{r echo = FALSE}
+filesummary
+```
+
+##**2) Sampling data**##
+
+Each dataset has a huge number of lines. Due to limitations in computation power and time, binomial sampling is performed  to randomly extract 10% of total lines for use in this analysis.
+
+```{r sample set, echo = TRUE}
+
+#sample set creation
+blogsample <- rbinom(length(blogs), 1, 0.1)
+newssample <- rbinom(length(news), 1, 0.1)
+twittersample <- rbinom(length(twitter), 1, 0.1)
+
+ 
+blogs <- blogs[blogsample==1]
+news <- news[newssample ==1]
+twitter <-twitter[twittersample==1]
+
+```
+
+```{r summary2, echo = FALSE}
+n1<- format(object.size(blogs), units = "Mb")
+n2 <- as.data.frame(stri_stats_latex(news)[4])[1,]
+n3 <- length(news)
+b1 <- format(object.size(blogs), units = "Mb") 
+b2 <- as.data.frame(stri_stats_latex(blogs)[4])[1,]
+b3 <- length(blogs)
+t1 <- format(object.size(blogs), units = "Mb")
+t2 <- as.data.frame(stri_stats_latex(twitter)[4])[1,]
+t3 <- length(twitter)
+filesummary2 <- matrix(c(b1, n1, t1, b2, n2, t2, b3, n3, t3), nrow = 3, ncol = 3, byrow = TRUE, dimnames = list(c("File Size", "Words Count", "Rows Count"),c("Blogs", "News", "Twitter")))
+```
+Summary of file samples:
+```{r summary3, echo = FALSE}
+
+filesummary2
+
+```
+
+
+##**3) Creating a clean corpus**##
+
+A corpus is a collection of text document that can be used as the reference source for data mining. Here we attempt to create a clean and usable file combining the input from news, blogs and twitter samples.
+
+```{r Corpus, echo = TRUE}
+#Replace special characters formed due to format conversion issues
+ 
+specialcharacter <- c("â€œ", "â€˜", "â€™", "â€”", "â€“", "â€¢", "â€¦", "â€")
+translation <- c("“", "‘" ,"’", "–", "—", "-", "…", "”")
+ 
+for(i in 1:length(specialcharacter)){
+       blogs <- gsub(specialcharacter[i], translation[i], blogs)
+ }
+              
+for(i in 1:length(specialcharacter)){
+       news<- gsub(specialcharacter[i], translation[i], news)
+   }
+ 
+for(i in 1:length(specialcharacter)){
+       twitter<- gsub(specialcharacter[i], translation[i], twitter)
+   }             
+ 
+## Remove emojis
+ blogs<- iconv(blogs, 'UTF-8', 'ASCII', "")   
+twitter<- iconv(twitter, 'UTF-8', 'ASCII', "")            
+news<- iconv(news, 'UTF-8', 'ASCII', "")   
+ 
+##Create corpus and remove unnecessary variables to free up memory
+ 
+writeLines(blogs, con = "en_US.blogs2.txt", sep = "\n", useBytes = F)
+writeLines(twitter, con = "en_US.twitter2.txt", sep = "\n", useBytes = F)
+writeLines(news, con = "en_US.news2.txt", sep = "\n", useBytes = F)
+ 
+rm(list=ls())
+ 
+acorpus <- Corpus(DirSource("./",pattern="en_US.blogs2.txt|en_US.twitter2.txt|en_US.news2.txt"))
+ 
+ 
+## Remove profanity and clean up the corpus
+ 
+profanitylist <- readLines("profanity-list.txt") # Data for this list was retrieved from https://gist.github.com/jamiew/1112488
+ 
+acorpus <- tm_map(acorpus, removeWords, profanitylist)
+acorpus <- tm_map(acorpus, content_transformer(tolower))
+acorpus <- tm_map(acorpus, removeNumbers)
+acorpus <- tm_map(acorpus, removePunctuation)
+acorpus <- tm_map(acorpus, stripWhitespace)
+```
+
+##**4) Ngrams compilation - 1 to 4 most frequent word combinations**##
+
+In this section, we build a list of Ngrams (word combinations- single up to 4 words) and sort them out based on frequency of occurence. This will be used in the upcoming prediction model building.
+
+```{r Ngram}
+options( java.parameters = "-Xmx4g" )#to assign up to 4GB RAM for java
+library(RWeka)
+
+Tokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 1))
+onedtm <- DocumentTermMatrix(acorpus, control = list(tokenize = Tokenizer))
+
+BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+twodtm <- DocumentTermMatrix(acorpus, control = list(tokenize = BigramTokenizer))
+
+
+TrigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 3, max = 3))
+threedtm <- DocumentTermMatrix(acorpus, control = list(tokenize = TrigramTokenizer))
+
+
+QuadgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 4, max = 4))
+fourdtm <- DocumentTermMatrix(acorpus, control = list(tokenize =QuadgramTokenizer))
+rm(acorpus)
+```
+
+
+##**5) Visualization of frequent word list**##
+
+First, create a sorted frequency table of Ngrams 
+```{r dataframe, echo = TRUE}
+tm_freq <- sort(colSums(as.matrix(onedtm)), decreasing=TRUE)
+tm_wordfreq <- data.frame(word=names(tm_freq), freq=tm_freq)
+tm_wordfreq$word = factor(tm_wordfreq$word, levels = tm_wordfreq$word[order(-tm_wordfreq$freq)])
+```
+Repeat for 2, 3 and 4 Ngrams (code not shown)
+
+```{r dataframe2, echo = FALSE}
+tm_2freq <- sort(colSums(as.matrix(twodtm)), decreasing=TRUE)
+tm_2wordfreq <- data.frame(word=names(tm_2freq), freq=tm_2freq)
+tm_2wordfreq$word = factor(tm_2wordfreq$word, levels = tm_2wordfreq$word[order(-tm_2wordfreq$freq)])
+
+tm_3freq <- sort(colSums(as.matrix(threedtm)), decreasing=TRUE)
+tm_3wordfreq <- data.frame(word=names(tm_3freq), freq=tm_3freq)
+tm_3wordfreq$word = factor(tm_3wordfreq$word, levels = tm_3wordfreq$word[order(-tm_3wordfreq$freq)])
+
+tm_4freq <- sort(colSums(as.matrix(fourdtm)), decreasing=TRUE)
+tm_4wordfreq <- data.frame(word=names(tm_4freq), freq=tm_4freq)
+tm_4wordfreq$word = factor(tm_4wordfreq$word, levels = tm_4wordfreq$word[order(-tm_4wordfreq$freq)])
+```
+
+```{r, echo = FALSE}
+rm(onedtm)
+rm(twodtm)
+rm(threedtm)
+rm(fourdtm)
+
+write.csv(tm_wordfreq, file = "single.csv")
+write.csv(tm_2wordfreq, file = "double.csv")
+write.csv(tm_3wordfreq, file = "triple.csv")
+write.csv(tm_4wordfreq, file = "quadruple.csv")
+```
+
+
+Create a plot function to visualize
+```{r plots function, echo = TRUE}
+
+#Plot for unigrams
+ggplot(head(tm_wordfreq, 50), aes(word, freq))+geom_bar(stat = "identity") + labs(title = "Frequency of top 50 UniGrams")+ xlab("Word") + ylab("Frequency") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + scale_y_continuous(labels =function(tm_wordfreq){format(tm_wordfreq, scientific=FALSE)})
+
+#Plot for bigrams
+ggplot(head(tm_2wordfreq, 50), aes(word, freq))+geom_bar(stat = "identity") + labs(title = "Frequency of top 50 BiGrams")+ xlab("Word") + ylab("Frequency") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + scale_y_continuous(labels =function(tm_2wordfreq){format(tm_2wordfreq, scientific=FALSE)})
+
+
+#Plot for trigrams
+ggplot(head(tm_3wordfreq, 50), aes(word, freq))+geom_bar(stat = "identity") + labs(title = "Frequency of top 50 TriGrams")+ xlab("Word") + ylab("Frequency") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + scale_y_continuous(labels =function(tm_3wordfreq){format(tm_3wordfreq, scientific=FALSE)})
+
+#Plot for quadgrams
+ggplot(head(tm_4wordfreq, 50), aes(word, freq))+geom_bar(stat = "identity") + labs(title = "Frequency of top 50 QuadGrams")+ xlab("Word") + ylab("Frequency") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + scale_y_continuous(labels =function(tm_4wordfreq){format(tm_4wordfreq, scientific=FALSE)})
+```
+
+
+##**Conclusion**##
+
+Data show a multitude of NGrams possibilities that are skewed around the highest 5 to 10 combination.
+
+A better understanding of the data, and effective cleaning has been achieved. The basic exploration and identification has been completed. The list of common words and phrases that are obtained will be used for the next stage of predictive text model building.
